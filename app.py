@@ -2,17 +2,20 @@ import streamlit as st
 import fitz  # PyMuPDF
 import io
 
-st.set_page_config(page_title="Chỉnh thông tin dưới CLIENTE", layout="centered")
-st.title("Chỉnh thông tin dưới CLIENTE trong PDF")
+st.set_page_config(page_title="Chỉnh CLIENTE PDF", layout="centered")
+st.title("Chỉnh thông tin dưới CLIENTE giống mẫu")
 
 uploaded_file = st.file_uploader("Tải file PDF", type="pdf")
 
-# Nội dung mới cần thêm vào
-NEW_TEXT = """SUNFLOWER LOGISTIC SL
-C.I.F.: B09775438
-CALLE SANDALIO LOPEZ, 20, ENTREGA 10-14H
-28034 SPAIN
-MADRID, MADRID"""
+# Nội dung mới
+NEW_LINES = [
+    ("CLIENTE:", (0, 0, 0), True),  # text, màu, in đậm
+    ("SUNFLOWER LOGISTIC SL", (0.4, 0.4, 0.4), False),
+    ("CALLE SANDALIO LOPEZ, 20, ENTREGA 10-14H", (0.4, 0.4, 0.4), False),
+    ("MADRID, MADRID", (0.4, 0.4, 0.4), False),
+    ("28034 SPAIN", (0.4, 0.4, 0.4), False),
+    ("C.I.F.: B09775438", (0.4, 0.4, 0.4), False)
+]
 
 if uploaded_file:
     pdf_bytes = uploaded_file.read()
@@ -21,39 +24,37 @@ if uploaded_file:
     replaced_any = False
 
     for page in doc:
-        blocks = page.get_text("blocks")  # mỗi block là (x0, y0, x1, y1, text, block_no, block_type)
+        blocks = page.get_text("blocks")
         for i, b in enumerate(blocks):
-            text_block = b[4].strip()
+            if "CLIENTE:" in b[4].upper():
+                x0, y0, x1, y1 = b[:4]
 
-            if text_block.upper().startswith("CLIENTE:"):
-                # Lấy tọa độ khối "CLIENTE:"
-                cliente_x0, cliente_y0, cliente_x1, cliente_y1 = b[:4]
+                # Xóa toàn bộ nội dung cũ phía dưới CLIENTE
+                page.add_redact_annot(fitz.Rect(x0, y0, x1, y0 + 90))
+                page.apply_redactions()
 
-                # Xác định khối text kế tiếp (thông tin cần xóa)
-                if i + 1 < len(blocks):
-                    next_block = blocks[i + 1]
-                    x0, y0, x1, y1 = next_block[:4]
-
-                    # Xóa nội dung cũ
-                    page.add_redact_annot(fitz.Rect(x0, y0, x1, y1 + 60))  # mở rộng một chút chiều cao
-                    page.apply_redactions()
-
-                    # Chèn nội dung mới ngay vị trí khối cũ
+                # Vẽ lại theo mẫu
+                line_height = 14  # khoảng cách dòng
+                for idx, (text, color, bold) in enumerate(NEW_LINES):
+                    fontname = "helv"
+                    if bold:
+                        fontname = "helvb"  # Helvetica Bold
                     page.insert_text(
-                        (x0, y0),  # vị trí bắt đầu
-                        NEW_TEXT,
-                        fontsize=11,
-                        fontname="helv",
-                        fill=(0, 0, 0)
+                        (x0, y0 + idx * line_height),
+                        text,
+                        fontsize=12,
+                        fontname=fontname,
+                        fill=color
                     )
-                    replaced_any = True
+
+                replaced_any = True
                 break
 
     if replaced_any:
         output = io.BytesIO()
         doc.save(output)
         output.seek(0)
-        st.success("Đã thay thông tin dưới CLIENTE thành công!")
+        st.success("Đã thay thông tin dưới CLIENTE giống mẫu!")
         st.download_button(
             "📥 Tải PDF đã chỉnh sửa",
             data=output,
@@ -61,4 +62,4 @@ if uploaded_file:
             mime="application/pdf"
         )
     else:
-        st.warning("Không tìm thấy chữ 'CLIENTE:' trong file PDF.")
+        st.warning("Không tìm thấy 'CLIENTE:' trong file PDF.")
